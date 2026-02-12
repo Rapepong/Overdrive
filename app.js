@@ -1,7 +1,7 @@
 // Import Firebase SDKs
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
 import { getFirestore, collection, addDoc, onSnapshot, query, orderBy, deleteDoc, doc, serverTimestamp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
-import { getStorage, ref, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-storage.js";
+import { getStorage, ref, uploadBytes, getDownloadURL, deleteObject, uploadBytesResumable } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-storage.js";
 import { getAuth, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js";
 
 // --- CONFIGURATION ---
@@ -76,74 +76,122 @@ dropZone.addEventListener('drop', (e) => {
 });
 
 // Upload Logic
-uploadBtn.addEventListener('click', async () => {
+uploadBtn.addEventListener('click', () => { // Remove async here, handled in callbacks
     if (uploadBtn.disabled) return;
 
     uploadBtn.disabled = true;
     uploadProgress.classList.remove('hidden');
-    progressBar.style.width = '30%';
+    progressBar.style.width = '0%'; // Start at 0
 
-    try {
-        if (currentTab === 'file') {
-            const file = fileInput.files[0];
-            if (!file) throw new Error("Please select a file.");
-
-            // Upload to Storage
-            const storageRef = ref(storage, `uploads/${Date.now()}_${file.name}`);
-            progressBar.style.width = '60%';
-            await uploadBytes(storageRef, file);
-
-            const url = await getDownloadURL(storageRef);
-            progressBar.style.width = '90%';
-
-            // Save Metadata to Firestore
-            await addDoc(sharesCollection, {
-                type: file.type.startsWith('image/') ? 'image' : 'file',
-                name: file.name,
-                content: url,
-                storagePath: storageRef.fullPath,
-                timestamp: serverTimestamp()
-            });
-
-        } else {
-            const text = textInput.value.trim();
-            if (!text) throw new Error("Please enter some text.");
-
-            await addDoc(sharesCollection, {
-                type: 'text',
-                content: text,
-                timestamp: serverTimestamp()
-            });
+    if (currentTab === 'file') {
+        const file = fileInput.files[0];
+        if (!file) {
+            alert("Please select a file.");
+            resetUploadUI();
+            return;
         }
 
-        // Reset UI
-        progressBar.style.width = '100%';
-        setTimeout(() => {
-            uploadProgress.classList.add('hidden');
-            progressBar.style.width = '0%';
-            uploadBtn.disabled = false;
+        // Upload to Storage (Resumable)
+        const storageRef = ref(storage, `uploads/${Date.now()}_${file.name}`);
+        const uploadTask = uploadBytesResumable(storageRef, file);
 
-            // Clear inputs logic
-            fileInput.value = '';
-            textInput.value = '';
+        uploadTask.on('state_changed',
+            (snapshot) => {
+                // Observe state change events such as progress, pause, and resume
+                const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+                console.log('Upload is ' + progress + '% done');
+                progressBar.style.width = progress + '%';
+                progressBar.innerText = Math.round(progress) + '%';
+                progressBar.style.textAlign = 'center';
+                progressBar.style.color = 'white';
+            },
+            (error) => {
+                // Handle unsuccessful uploads
+                console.error("Upload failed:", error);
+                let msg = "Upload failed: " + error.message;
+                if (error.code === 'storage/unauthorized') {
+                    msg = "Permission Denied: Please check your Firebase Storage Rules. You might need to allow Public Read/Write.";
+                } else if (error.code === 'storage/canceled') {
+                    msg = "Upload canceled.";
+                } else if (error.code === 'storage/unknown') {
+                    msg = "Unknown error occurred, inspect error.serverResponse";
+                }
+                alert(msg);
+                resetUploadUI();
+            },
+            async () => {
+                // Handle successful uploads on complete
+                try {
+                    const url = await getDownloadURL(uploadTask.snapshot.ref);
 
-            if (currentTab === 'file') {
-                dropZone.innerHTML = `<i class="fa-solid fa-cloud-arrow-up"></i><p>Drag & Drop or Click to Upload</p><span class="file-types">Supports: PDF, PNG, JPG, GIF</span><input type="file" id="fileElement" accept="image/*,.pdf" hidden>`;
-                // Re-bind listener since we overwrote HTML
-                document.getElementById('fileElement').addEventListener('change', () => {
-                    dropZone.innerHTML = `<i class="fa-solid fa-check-circle" style="color: #22c55e"></i><p>${document.getElementById('fileElement').files[0].name}</p>`;
-                });
+                    // Save Metadata to Firestore
+                    await addDoc(sharesCollection, {
+                        type: file.type.startsWith('image/') ? 'image' : 'file',
+                        name: file.name,
+                        content: url,
+                        storagePath: storageRef.fullPath,
+                        timestamp: serverTimestamp()
+                    });
+
+                    // Success UI
+                    finishUpload("File uploaded successfully!");
+                } catch (fsError) {
+                    console.error("Firestore Save Error:", fsError);
+                    alert("File uploaded but failed to save metadata: " + fsError.message);
+                    resetUploadUI();
+                }
             }
-        }, 500);
+        );
 
-    } catch (error) {
-        console.error(error);
-        alert(error.message);
-        uploadBtn.disabled = false;
-        uploadProgress.classList.add('hidden');
-        progressBar.style.width = '0%';
+    } else {
+        // Text Upload (Keep as async/await since it's fast)
+        (async () => {
+            try {
+                const text = textInput.value.trim();
+                if (!text) throw new Error("Please enter some text.");
+
+                progressBar.style.width = '50%'; // Fake progress for text
+                await addDoc(sharesCollection, {
+                    type: 'text',
+                    content: text,
+                    timestamp: serverTimestamp()
+                });
+                progressBar.style.width = '100%';
+
+                finishUpload("Text shared successfully!");
+            } catch (error) {
+                console.error(error);
+                alert(error.message);
+                resetUploadUI();
+            }
+        })();
     }
 });
+
+function resetUploadUI() {
+    uploadBtn.disabled = false;
+    uploadProgress.classList.add('hidden');
+    progressBar.style.width = '0%';
+}
+
+function finishUpload(message) {
+    progressBar.style.width = '100%';
+    setTimeout(() => {
+        resetUploadUI();
+
+        // Clear inputs
+        fileInput.value = '';
+        textInput.value = '';
+
+        if (currentTab === 'file') {
+            dropZone.innerHTML = `<i class="fa-solid fa-cloud-arrow-up"></i><p>Drag & Drop or Click to Upload</p><span class="file-types">Supports: PDF, PNG, JPG, GIF</span><input type="file" id="fileElement" accept="image/*,.pdf" hidden>`;
+            // Re-bind listener since we overwrote HTML
+            document.getElementById('fileElement').addEventListener('change', () => {
+                dropZone.innerHTML = `<i class="fa-solid fa-check-circle" style="color: #22c55e"></i><p>${document.getElementById('fileElement').files[0].name}</p>`;
+            });
+        }
+    }, 500);
+}
 
 // Real-time Feed
 const q = query(sharesCollection, orderBy("timestamp", "desc"));
