@@ -10,7 +10,7 @@ const firebaseConfig = {
     apiKey: "AIzaSyArAymckNzsTVKORI7OptbwYeneCFY_8a8",
     authDomain: "sharefile-df9e9.firebaseapp.com",
     projectId: "sharefile-df9e9",
-    storageBucket: "sharefile-df9e9.firebasestorage.app",
+    storageBucket: "sharefile-df9e9.firebasestorage.app", // Replace with your Firebase Storage Bucket
     messagingSenderId: "330167010298",
     appId: "1:330167010298:web:cbca81d9e89ddbaa7c1a43",
     measurementId: "G-G8M3GRFGTC"
