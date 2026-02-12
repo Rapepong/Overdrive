@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ShareFlow | Secure File Sharing</title>
+    <link rel="stylesheet" href="style.css">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <div class="background-glob"></div>
+    <div class="background-glob two"></div>
+
+    <div class="container">
+        <header>
+            <div class="logo">
+                <i class="fa-solid fa-cloud-bolt"></i>
+                <h1>ShareFlow</h1>
+            </div>
+            <p class="subtitle">Share Text, Images, and PDFs instantly.</p>
+        </header>
+
+        <main>
+            <!-- Upload Section -->
+            <section class="upload-card glass-panel">
+                <div class="tabs">
+                    <button class="tab-btn active" onclick="switchTab('file')"><i class="fa-solid fa-file"></i> File</button>
+                    <button class="tab-btn" onclick="switchTab('text')"><i class="fa-solid fa-font"></i> Text</button>
+                </div>
+
+                <div id="file-upload-area" class="upload-area">
+                    <div class="drop-zone" id="drop-zone">
+                        <i class="fa-solid fa-cloud-arrow-up"></i>
+                        <p>Drag & Drop or Click to Upload</p>
+                        <span class="file-types">Supports: PDF, PNG, JPG, GIF</span>
+                        <input type="file" id="fileElement" accept="image/*,.pdf" hidden>
+                    </div>
+                </div>
+
+                <div id="text-upload-area" class="upload-area hidden">
+                    <textarea id="textElement" placeholder="Type your message here..."></textarea>
+                </div>
+
+                <div class="actions">
+                    <button id="uploadBtn" class="primary-btn">
+                        <span>Send Data</span>
+                        <i class="fa-solid fa-paper-plane"></i>
+                    </button>
+                    <div id="uploadProgress" class="progress-bar hidden">
+                        <div class="fill"></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Feed Section -->
+            <div class="feed-header">
+                <h2>Recent Shares</h2>
+                <div class="live-indicator"><span class="dot"></span> Live</div>
+            </div>
+
+            <div id="feed" class="feed-grid">
+                <!-- Items will be injected here by JS -->
+                <div class="loading-skeleton glass-panel"></div>
+                <div class="loading-skeleton glass-panel"></div>
+                <div class="loading-skeleton glass-panel"></div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Password Modal -->
+    <div id="passwordModal" class="modal hidden">
+        <div class="modal-content glass-panel">
+            <h3>Security Check</h3>
+            <p>Enter password to delete this item.</p>
+            <input type="password" id="deletePassword" placeholder="Password">
+            <div class="modal-actions">
+                <button onclick="closeModal()" class="secondary-btn">Cancel</button>
+                <button id="confirmDeleteBtn" class="danger-btn">Delete</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Firebase SDKs -->
+    <script type="module" src="app.js"></script>
+</body>
+</html>
