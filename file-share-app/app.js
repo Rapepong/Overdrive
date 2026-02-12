@@ -2,25 +2,25 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
 import { getFirestore, collection, addDoc, onSnapshot, query, orderBy, deleteDoc, doc, serverTimestamp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 import { getStorage, ref, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-storage.js";
+import { getAuth, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js";
 
 // --- CONFIGURATION ---
 // TODO: Replace with your Firebase Project Configuration
 const firebaseConfig = {
-    apiKey: "YOUR_API_KEY",
-    authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
-    projectId: "YOUR_PROJECT_ID",
-    storageBucket: "YOUR_PROJECT_ID.appspot.com",
-    messagingSenderId: "YOUR_SENDER_ID",
-    appId: "YOUR_APP_ID"
+    apiKey: "AIzaSyArAymckNzsTVKORI7OptbwYeneCFY_8a8",
+    authDomain: "sharefile-df9e9.firebaseapp.com",
+    projectId: "sharefile-df9e9",
+    storageBucket: "sharefile-df9e9.firebasestorage.app",
+    messagingSenderId: "330167010298",
+    appId: "1:330167010298:web:cbca81d9e89ddbaa7c1a43",
+    measurementId: "G-G8M3GRFGTC"
 };
-
-// Admin Password for Deletion (Simple Client-Side Check)
-const DELETE_PASSWORD = "admin"; 
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const storage = getStorage(app);
+const auth = getAuth(app);
 const sharesCollection = collection(db, "shares");
 
 // --- UI ELEMENTS ---
@@ -77,6 +77,8 @@ dropZone.addEventListener('drop', (e) => {
 
 // Upload Logic
 uploadBtn.addEventListener('click', async () => {
+    if (uploadBtn.disabled) return;
+
     uploadBtn.disabled = true;
     uploadProgress.classList.remove('hidden');
     progressBar.style.width = '30%';
@@ -90,7 +92,7 @@ uploadBtn.addEventListener('click', async () => {
             const storageRef = ref(storage, `uploads/${Date.now()}_${file.name}`);
             progressBar.style.width = '60%';
             await uploadBytes(storageRef, file);
-            
+
             const url = await getDownloadURL(storageRef);
             progressBar.style.width = '90%';
 
@@ -120,14 +122,16 @@ uploadBtn.addEventListener('click', async () => {
             uploadProgress.classList.add('hidden');
             progressBar.style.width = '0%';
             uploadBtn.disabled = false;
-            // Clear inputs
+
+            // Clear inputs logic
             fileInput.value = '';
             textInput.value = '';
+
             if (currentTab === 'file') {
                 dropZone.innerHTML = `<i class="fa-solid fa-cloud-arrow-up"></i><p>Drag & Drop or Click to Upload</p><span class="file-types">Supports: PDF, PNG, JPG, GIF</span><input type="file" id="fileElement" accept="image/*,.pdf" hidden>`;
                 // Re-bind listener since we overwrote HTML
                 document.getElementById('fileElement').addEventListener('change', () => {
-                     dropZone.innerHTML = `<i class="fa-solid fa-check-circle" style="color: #22c55e"></i><p>${document.getElementById('fileElement').files[0].name}</p>`;
+                    dropZone.innerHTML = `<i class="fa-solid fa-check-circle" style="color: #22c55e"></i><p>${document.getElementById('fileElement').files[0].name}</p>`;
                 });
             }
         }, 500);
@@ -137,21 +141,35 @@ uploadBtn.addEventListener('click', async () => {
         alert(error.message);
         uploadBtn.disabled = false;
         uploadProgress.classList.add('hidden');
+        progressBar.style.width = '0%';
     }
 });
 
 // Real-time Feed
 const q = query(sharesCollection, orderBy("timestamp", "desc"));
-onSnapshot(q, (snapshot) => {
+const unsubscribe = onSnapshot(q, (snapshot) => {
     feedContainer.innerHTML = ''; // Clear current feed
-    
+
+    if (snapshot.empty) {
+        feedContainer.innerHTML = '<div class="glass-panel" style="padding: 2rem; text-align: center; color: var(--text-muted);">No files shared yet.</div>';
+        return;
+    }
+
     snapshot.forEach((doc) => {
         const data = doc.data();
         const card = document.createElement('div');
         card.className = 'feed-item glass-panel';
-        
+
         // Date formatting
-        const date = data.timestamp ? data.timestamp.toDate().toLocaleString() : 'Just now';
+        let dateDisplay = 'Just now';
+        if (data.timestamp) {
+            // Check if it's a Firestore Timestamp (has toDate) or a Date object
+            const dateObj = data.timestamp.toDate ? data.timestamp.toDate() : new Date(data.timestamp);
+            dateDisplay = dateObj.toLocaleString('th-TH', {
+                day: '2-digit', month: '2-digit', year: '2-digit',
+                hour: '2-digit', minute: '2-digit', second: '2-digit'
+            });
+        }
 
         let contentHtml = '';
         if (data.type === 'image') {
@@ -171,7 +189,7 @@ onSnapshot(q, (snapshot) => {
 
         card.innerHTML = `
             <div class="feed-header-item">
-                <span>${date}</span>
+                <span style="font-size: 0.8rem; opacity: 0.8;"><i class="fa-regular fa-clock"></i> ${dateDisplay}</span>
                 <button class="delete-btn" onclick="requestDelete('${doc.id}', '${data.storagePath || ''}')">
                     <i class="fa-solid fa-trash"></i>
                 </button>
@@ -182,6 +200,9 @@ onSnapshot(q, (snapshot) => {
         `;
         feedContainer.appendChild(card);
     });
+}, (error) => {
+    console.error("Error fetching data:", error);
+    feedContainer.innerHTML = `<div class="glass-panel" style="padding: 1rem; color: #ef4444;">Error loading feed: ${error.message}<br><small>Check Firebase Console > Firestore Database > Rules</small></div>`;
 });
 
 // Security / XSS Prevention
@@ -194,14 +215,22 @@ function escapeHtml(text) {
 // Deletion Logic
 let itemToDelete = null;
 let storagePathToDelete = null;
-const modal = document.getElementById('passwordModal');
+const modal = document.getElementById('loginModal');
 
 window.requestDelete = (id, storagePath) => {
-    itemToDelete = id;
-    storagePathToDelete = storagePath;
-    modal.classList.remove('hidden');
-    document.getElementById('deletePassword').value = '';
-    document.getElementById('deletePassword').focus();
+    // Check if already logged in (optional optimization)
+    if (auth.currentUser) {
+        if (confirm("Are you sure you want to delete this item?")) {
+            performDelete(id, storagePath);
+        }
+    } else {
+        itemToDelete = id;
+        storagePathToDelete = storagePath;
+        modal.classList.remove('hidden');
+        document.getElementById('loginEmail').value = '';
+        document.getElementById('loginPassword').value = '';
+        document.getElementById('loginEmail').focus();
+    }
 };
 
 window.closeModal = () => {
@@ -210,25 +239,33 @@ window.closeModal = () => {
     storagePathToDelete = null;
 };
 
-document.getElementById('confirmDeleteBtn').addEventListener('click', async () => {
-    const password = document.getElementById('deletePassword').value;
-    
-    if (password === DELETE_PASSWORD) {
-        try {
-            // Delete from Firestore
-            await deleteDoc(doc(db, "shares", itemToDelete));
-            
-            // Delete from Storage if needed
-            if (storagePathToDelete) {
-                const fileRef = ref(storage, storagePathToDelete);
-                await deleteObject(fileRef);
-            }
-            
-            closeModal();
-        } catch (error) {
-            alert("Error deleting: " + error.message);
+// Helper to perform delete
+async function performDelete(id, storagePath) {
+    try {
+        await deleteDoc(doc(db, "shares", id));
+        if (storagePath) {
+            const fileRef = ref(storage, storagePath);
+            await deleteObject(fileRef);
         }
-    } else {
-        alert("Incorrect Password!");
+    } catch (error) {
+        alert("Error deleting: " + error.message);
+    }
+}
+
+document.getElementById('loginDeleteBtn').addEventListener('click', async () => {
+    const email = document.getElementById('loginEmail').value;
+    const password = document.getElementById('loginPassword').value;
+
+    try {
+        // Log in
+        await signInWithEmailAndPassword(auth, email, password);
+
+        // If login success, delete item
+        await performDelete(itemToDelete, storagePathToDelete);
+
+        closeModal();
+    } catch (error) {
+        console.error(error);
+        alert("Login Failed: " + error.message);
     }
 });

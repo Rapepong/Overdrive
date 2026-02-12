@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -10,6 +11,7 @@
     <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
+
 <body>
     <div class="background-glob"></div>
     <div class="background-glob two"></div>
@@ -27,7 +29,8 @@
             <!-- Upload Section -->
             <section class="upload-card glass-panel">
                 <div class="tabs">
-                    <button class="tab-btn active" onclick="switchTab('file')"><i class="fa-solid fa-file"></i> File</button>
+                    <button class="tab-btn active" onclick="switchTab('file')"><i class="fa-solid fa-file"></i>
+                        File</button>
                     <button class="tab-btn" onclick="switchTab('text')"><i class="fa-solid fa-font"></i> Text</button>
                 </div>
 
@@ -70,15 +73,16 @@
         </main>
     </div>
 
-    <!-- Password Modal -->
-    <div id="passwordModal" class="modal hidden">
+    <!-- Login Modal -->
+    <div id="loginModal" class="modal hidden">
         <div class="modal-content glass-panel">
-            <h3>Security Check</h3>
-            <p>Enter password to delete this item.</p>
-            <input type="password" id="deletePassword" placeholder="Password">
+            <h3>Admin Login</h3>
+            <p>Please login to delete this item.</p>
+            <input type="email" id="loginEmail" placeholder="Email Address">
+            <input type="password" id="loginPassword" placeholder="Password">
             <div class="modal-actions">
                 <button onclick="closeModal()" class="secondary-btn">Cancel</button>
-                <button id="confirmDeleteBtn" class="danger-btn">Delete</button>
+                <button id="loginDeleteBtn" class="danger-btn">Login & Delete</button>
             </div>
         </div>
     </div>
@@ -86,4 +90,5 @@
     <!-- Firebase SDKs -->
     <script type="module" src="app.js"></script>
 </body>
+
 </html>
